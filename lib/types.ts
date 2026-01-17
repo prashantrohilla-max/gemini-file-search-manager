@@ -92,3 +92,22 @@ export interface ChatResponse {
   message: ChatMessage;
   groundingMetadata?: GroundingMetadata;
 }
+
+// Streaming types
+export interface StreamTextChunk {
+  type: "text";
+  content: string;
+}
+
+export interface StreamDoneChunk {
+  type: "done";
+  groundingMetadata?: GroundingMetadata;
+  citations?: GroundingChunk[];
+}
+
+export interface StreamErrorChunk {
+  type: "error";
+  message: string;
+}
+
+export type StreamChunk = StreamTextChunk | StreamDoneChunk | StreamErrorChunk;

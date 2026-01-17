@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { useChat, ChatMessage } from "@/hooks/use-chat";
+import { useChatStream } from "@/hooks/use-chat";
 import { SUPPORTED_MODELS, DEFAULT_MODEL } from "@/lib/gemini";
 import { CitationDisplay } from "@/components/citation-display";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Send, Loader2, User, Bot, Trash2 } from "lucide-react";
+import { Send, Loader2, User, Bot, Trash2, Square } from "lucide-react";
 import { toast } from "sonner";
 
 interface ChatPlaygroundProps {
@@ -31,58 +31,57 @@ interface ChatPlaygroundProps {
 }
 
 export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [metadataFilter, setMetadataFilter] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const chat = useChat();
+  const lastErrorRef = useRef<string | null>(null);
 
+  const { messages, isStreaming, error, sendMessage, clearMessages, abortStream } =
+    useChatStream({
+      storeId,
+      model,
+      metadataFilter,
+    });
+
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const scrollContainer = scrollRef.current.querySelector(
+        "[data-radix-scroll-area-viewport]"
+      );
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
     }
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || chat.isPending) return;
-
-    const userMessage: ChatMessage = {
-      role: "user",
-      content: input.trim(),
-    };
-
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput("");
-
-    try {
-      const response = await chat.mutateAsync({
-        storeId,
-        messages: newMessages,
-        model,
-        metadataFilter: metadataFilter || undefined,
-      });
-
-      setMessages([...newMessages, response.message]);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send message"
-      );
-      // Remove the user message if the request failed
-      setMessages(messages);
+  // Show error via toast (only once per error)
+  useEffect(() => {
+    if (error && error !== lastErrorRef.current) {
+      toast.error(error);
+      lastErrorRef.current = error;
+    } else if (!error) {
+      lastErrorRef.current = null;
     }
-  };
+  }, [error]);
 
-  const clearChat = () => {
-    setMessages([]);
-  };
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!input.trim() || isStreaming) return;
+
+      const content = input.trim();
+      setInput("");
+      await sendMessage(content);
+    },
+    [input, isStreaming, sendMessage]
+  );
 
   return (
-    <div className="flex flex-col h-full border rounded-lg bg-white">
+    <div className="flex flex-col h-full border rounded-lg bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
         <h3 className="font-semibold text-slate-900">RAG Playground</h3>
         <div className="flex items-center gap-2">
           <Select value={model} onValueChange={setModel}>
@@ -98,7 +97,7 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
             </SelectContent>
           </Select>
           {messages.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearChat}>
+            <Button variant="ghost" size="sm" onClick={clearMessages}>
               <Trash2 className="h-4 w-4" />
             </Button>
           )}
@@ -106,7 +105,7 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
       </div>
 
       {/* Filter options */}
-      <Accordion type="single" collapsible className="px-4 border-b">
+      <Accordion type="single" collapsible className="flex-shrink-0 px-4 border-b">
         <AccordionItem value="filter" className="border-none">
           <AccordionTrigger className="text-sm py-2">
             Metadata Filter
@@ -132,7 +131,7 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
       </Accordion>
 
       {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-4">
+      <ScrollArea ref={scrollRef} className="flex-1 min-h-0 p-4">
         {messages.length === 0 && (
           <div className="text-center py-12">
             <Bot className="h-12 w-12 mx-auto text-slate-300 mb-3" />
@@ -168,9 +167,15 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
                 {message.role === "user" ? (
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 ) : (
-                  <div className="prose text-sm">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  </div>
+                  <>
+                    {message.content ? (
+                      <div className="prose prose-sm max-w-none overflow-x-auto">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    ) : isStreaming && index === messages.length - 1 ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                    ) : null}
+                  </>
                 )}
                 {message.role === "assistant" && message.citations && (
                   <CitationDisplay citations={message.citations} />
@@ -183,22 +188,11 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
               )}
             </div>
           ))}
-
-          {chat.isPending && (
-            <div className="flex gap-3 justify-start">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-slate-600" />
-              </div>
-              <div className="bg-slate-100 rounded-lg px-4 py-3">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              </div>
-            </div>
-          )}
         </div>
       </ScrollArea>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t">
+      <form onSubmit={handleSubmit} className="flex-shrink-0 p-4 border-t">
         <div className="flex gap-2">
           <Textarea
             value={input}
@@ -212,17 +206,24 @@ export function ChatPlayground({ storeId }: ChatPlaygroundProps) {
               }
             }}
           />
-          <Button
-            type="submit"
-            disabled={!input.trim() || chat.isPending}
-            className="flex-shrink-0"
-          >
-            {chat.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+          {isStreaming ? (
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={abortStream}
+              className="flex-shrink-0"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={!input.trim()}
+              className="flex-shrink-0"
+            >
               <Send className="h-4 w-4" />
-            )}
-          </Button>
+            </Button>
+          )}
         </div>
       </form>
     </div>
