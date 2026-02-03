@@ -22,6 +22,8 @@ interface DeleteStoreDialogProps {
   storeName: string;
   hasDocuments: boolean;
   onDeleted?: () => void;
+  className?: string;
+  iconOnly?: boolean;
 }
 
 export function DeleteStoreDialog({
@@ -29,6 +31,8 @@ export function DeleteStoreDialog({
   storeName,
   hasDocuments,
   onDeleted,
+  className,
+  iconOnly,
 }: DeleteStoreDialogProps) {
   const [open, setOpen] = useState(false);
   const [forceDelete, setForceDelete] = useState(false);
@@ -55,9 +59,9 @@ export function DeleteStoreDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          <Trash2 className="h-4 w-4 mr-2" />
-          Delete Store
+        <Button variant="destructive" size={iconOnly ? "icon" : "sm"} className={className}>
+          <Trash2 className={iconOnly ? "h-4 w-4" : "h-4 w-4 mr-2"} />
+          {!iconOnly && "Delete Store"}
         </Button>
       </DialogTrigger>
       <DialogContent>
