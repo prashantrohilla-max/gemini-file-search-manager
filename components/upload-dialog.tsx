@@ -28,9 +28,11 @@ import { toast } from "sonner";
 
 interface UploadDialogProps {
   storeId: string;
+  className?: string;
+  iconOnly?: boolean;
 }
 
-export function UploadDialog({ storeId }: UploadDialogProps) {
+export function UploadDialog({ storeId, className, iconOnly }: UploadDialogProps) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -122,9 +124,9 @@ export function UploadDialog({ storeId }: UploadDialogProps) {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
-          <Upload className="h-4 w-4 mr-2" />
-          Upload Document
+        <Button className={className} size={iconOnly ? "icon" : "default"}>
+          <Upload className={iconOnly ? "h-4 w-4" : "h-4 w-4 mr-2"} />
+          {!iconOnly && "Upload Document"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
