@@ -4,6 +4,7 @@ import { useStores } from "@/hooks/use-stores";
 import { Sidebar } from "@/components/sidebar";
 import { StoreCard } from "@/components/store-card";
 import { CreateStoreDialog } from "@/components/create-store-dialog";
+import { MobileHeader } from "@/components/mobile-header";
 import { Database, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -17,13 +18,7 @@ export default function HomePage() {
         <Sidebar />
       </div>
 
-      {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 z-10 flex items-center justify-between p-4 border-b bg-white">
-        <div className="flex items-center gap-2">
-          <Database className="h-6 w-6 text-slate-700" />
-          <span className="font-semibold text-slate-900">File Search</span>
-        </div>
-      </div>
+      <MobileHeader title="File Search" />
 
       <main className="flex-1 flex flex-col md:overflow-hidden">
         <div className="p-4 md:p-8 flex-1 overflow-auto">

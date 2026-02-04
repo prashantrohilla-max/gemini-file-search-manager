@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useStore } from "@/hooks/use-stores";
 import { useDocuments } from "@/hooks/use-documents";
 import { Sidebar } from "@/components/sidebar";
@@ -9,6 +10,7 @@ import { DocumentList } from "@/components/document-list";
 import { UploadDialog } from "@/components/upload-dialog";
 import { DeleteStoreDialog } from "@/components/delete-store-dialog";
 import { ChatPlayground } from "@/components/chat-playground";
+import { MobileHeader } from "@/components/mobile-header";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +24,17 @@ export default function StorePage({ params }: StorePageProps) {
   const { storeId } = use(params);
   const { data: store, isLoading: storeLoading, error: storeError } = useStore(storeId);
   const { data: documents, isLoading: docsLoading } = useDocuments(storeId);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const activeTab = searchParams.get("tab") || "chat";
+
+  const handleTabChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const totalDocs =
     parseInt(store?.activeDocumentsCount || "0", 10) +
@@ -35,38 +48,25 @@ export default function StorePage({ params }: StorePageProps) {
         <Sidebar />
       </div>
 
-      {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 z-20 flex items-center justify-between p-3 border-b bg-white">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2 min-w-0">
-            <Database className="h-4 w-4 text-slate-500 shrink-0" />
-            {storeLoading ? (
-              <div className="h-5 w-24 bg-slate-200 rounded animate-pulse" />
-            ) : (
-              <h1 className="text-sm font-semibold text-slate-900 truncate">
-                {store?.displayName || storeId}
-              </h1>
+      <MobileHeader
+        title={store?.displayName || storeId}
+        backHref="/"
+        isLoading={storeLoading}
+        actions={
+          <>
+            <UploadDialog storeId={storeId} className="h-8 w-8 p-0" iconOnly />
+            {store && (
+              <DeleteStoreDialog
+                storeId={storeId}
+                storeName={store.displayName || storeId}
+                hasDocuments={totalDocs > 0}
+                className="h-8 w-8 p-0"
+                iconOnly
+              />
             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <UploadDialog storeId={storeId} className="h-8 w-8 p-0" iconOnly />
-          {store && (
-            <DeleteStoreDialog
-              storeId={storeId}
-              storeName={store.displayName || storeId}
-              hasDocuments={totalDocs > 0}
-              className="h-8 w-8 p-0"
-              iconOnly
-            />
-          )}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <main className="flex-1 flex flex-col md:overflow-hidden">
         {/* Desktop Header */}
@@ -118,9 +118,13 @@ export default function StorePage({ params }: StorePageProps) {
 
         {/* Mobile View - Tabbed Interface */}
         {!storeError && (
-          <div className="md:hidden flex-1 flex flex-col min-h-0">
-            <Tabs defaultValue="chat" className="flex flex-col flex-1">
-              <div className="px-3 pt-2 pb-2 bg-slate-50 border-b">
+          <div className="md:hidden flex-1 flex flex-col min-h-0 overflow-hidden">
+            <Tabs
+              value={activeTab}
+              onValueChange={handleTabChange}
+              className="flex flex-col flex-1 min-h-0"
+            >
+              <div className="px-3 pt-2 pb-2 bg-slate-50 border-b shrink-0">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="chat">Chat</TabsTrigger>
                   <TabsTrigger value="docs">
@@ -129,13 +133,19 @@ export default function StorePage({ params }: StorePageProps) {
                 </TabsList>
               </div>
 
-              <TabsContent value="chat" className="flex-1 p-2 m-0">
-                <div className="h-[calc(100vh-180px)]">
+              <TabsContent
+                value="chat"
+                className="flex-1 p-2 m-0 min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+              >
+                <div className="flex-1 min-h-0">
                   <ChatPlayground storeId={storeId} />
                 </div>
               </TabsContent>
 
-              <TabsContent value="docs" className="flex-1 overflow-auto p-4 m-0 pb-20">
+              <TabsContent
+                value="docs"
+                className="flex-1 overflow-auto p-4 m-0 pb-20"
+              >
                 {docsLoading && (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
